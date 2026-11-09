@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ポモドーロタイマー</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f3ee;
+    --panel: #ffffff;
+    --text: #2b2723;
+    --muted: #6f675e;
+    --line: #e2dcd2;
+    --track: #ece6dc;
+    --work: #c0432c;
+    --break: #2f7d5b;
+    --on-accent: #ffffff;
+    --accent: var(--work);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1a18;
+      --panel: #272421;
+      --text: #f1ece5;
+      --muted: #aaa196;
+      --line: #3b3732;
+      --track: #3b3732;
+      --work: #ef7a62;
+      --break: #62c398;
+      --on-accent: #1c1a18;
+    }
+  }
+  body[data-mode="break"] { --accent: var(--break); }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px 16px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+    line-height: 1.5;
+  }
+  main {
+    width: 100%;
+    max-width: 780px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px 24px;
+  }
+  h1, h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+
+  .timer { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+
+  .modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    max-width: 280px;
+    padding: 4px;
+    border-radius: 10px;
+    background: var(--track);
+  }
+  .modes button {
+    padding: 8px 4px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: .92rem;
+    cursor: pointer;
+  }
+  .modes button[aria-pressed="true"] {
+    background: var(--panel);
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .dial { position: relative; width: 240px; max-width: 100%; aspect-ratio: 1; }
+  .dial svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+  .dial circle { fill: none; stroke-width: 9; }
+  .dial .track { stroke: var(--track); }
+  .dial .progress {
+    stroke: var(--accent);
+    stroke-dasharray: 100;
+    transition: stroke-dashoffset .25s linear;
+  }
+  .time {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 3.4rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .01em;
+  }
+
+  .controls { display: flex; gap: 10px; }
+  .controls button {
+    min-width: 104px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .controls #toggle {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .status { min-height: 1.5em; margin: 0; color: var(--muted); font-size: .9rem; text-align: center; }
+
+  .todo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .todo-date { color: var(--muted); font-size: .85rem; }
+  .todos { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 12px; }
+  .todos li { display: flex; align-items: center; gap: 10px; }
+  .todos input[type="checkbox"] {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .todos input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+  }
+  .todos input[type="text"]::placeholder { color: var(--muted); }
+  .todos li.done input[type="text"] { color: var(--muted); text-decoration: line-through; }
+
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (max-width: 640px) {
+    body { place-items: start center; }
+    main { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dial .progress { transition: none; }
+  }
+</style>
+</head>
+<body data-mode="work">
+<main>
+  <section class="timer" aria-labelledby="timer-title">
+    <h1 id="timer-title">ポモドーロタイマー</h1>
+
+    <div class="modes" role="group" aria-label="モード">
+      <button type="button" id="mode-work" aria-pressed="true">作業 25分</button>
+      <button type="button" id="mode-break" aria-pressed="false">休憩 5分</button>
+    </div>
+
+    <div class="dial">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="track" cx="100" cy="100" r="90"></circle>
+        <circle class="progress" id="progress" cx="100" cy="100" r="90" pathLength="100"></circle>
+      </svg>
+      <div class="time" id="time" role="timer">25:00</div>
+    </div>
+
+    <div class="controls">
+      <button type="button" id="toggle">開始</button>
+      <button type="button" id="reset">リセット</button>
+    </div>
+
+    <p class="status" id="status" aria-live="polite"></p>
+  </section>
+
+  <section aria-labelledby="todo-title">
+    <div class="todo-head">
+      <h2 id="todo-title">今日のToDo</h2>
+      <span class="todo-date" id="todo-date"></span>
+    </div>
+    <ul class="todos" id="todos"></ul>
+  </section>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- タイマー ----------
+  const DURATIONS = { work: 25 * 60 * 1000, break: 5 * 60 * 1000 };
+  const LABELS = { work: '作業', break: '休憩' };
+  const $ = (id) => document.getElementById(id);
+
+  let mode = 'work';
+  let remaining = DURATIONS.work;
+  let endAt = null; // 動作中のみ、終了時刻（ミリ秒）が入る
+  let audio = null;
+
+  // 背景タブでは通常のタイマーが間引かれるため、Workerで時を刻む
+  let worker = null;
+  let fallbackTicker = null;
+  try {
+    const src = "let t;onmessage=e=>{clearInterval(t);if(e.data==='start')t=setInterval(()=>postMessage(0),200)}";
+    worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    worker.onmessage = tick;
+    worker.onerror = () => {
+      worker = null;
+      if (endAt !== null) startTicker();
+    };
+  } catch (e) {
+    worker = null;
+  }
+
+  function startTicker() {
+    if (worker) {
+      worker.postMessage('start');
+    } else {
+      clearInterval(fallbackTicker);
+      fallbackTicker = setInterval(tick, 200);
+    }
+  }
+
+  function stopTicker() {
+    if (worker) worker.postMessage('stop');
+    clearInterval(fallbackTicker);
+  }
+
+  function format(ms) {
+    const total = Math.ceil(ms / 1000);
+    const m = String(Math.floor(total / 60)).padStart(2, '0');
+    const s = String(total % 60).padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function render() {
+    const text = format(remaining);
+    $('time').textContent = text;
+    $('progress').style.strokeDashoffset = String(100 * (1 - remaining / DURATIONS[mode]));
+    document.body.dataset.mode = mode;
+    $('mode-work').setAttribute('aria-pressed', String(mode === 'work'));
+    $('mode-break').setAttribute('aria-pressed', String(mode === 'break'));
+    $('toggle').textContent = endAt !== null ? '一時停止'
+      : remaining < DURATIONS[mode] ? '再開' : '開始';
+    document.title = `${text} ${LABELS[mode]} - ポモドーロ`;
+  }
+
+  function setMode(next) {
+    stopTicker();
+    endAt = null;
+    mode = next;
+    remaining = DURATIONS[next];
+    render();
+  }
+
+  function tick() {
+    if (endAt === null) return;
+    remaining = Math.max(0, endAt - Date.now());
+    if (remaining === 0) {
+      const finished = mode;
+      setMode(finished === 'work' ? 'break' : 'work');
+      chime();
+      $('status').textContent = finished === 'work'
+        ? '作業が終わりました。休憩を始めましょう。'
+        : '休憩が終わりました。作業に戻りましょう。';
+      return;
+    }
+    render();
+  }
+
+  function chime() {
+    if (!audio) return;
+    const start = audio.currentTime + 0.05;
+    [0, 0.35, 0.7].forEach((offset) => {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, start + offset);
+      gain.gain.exponentialRampToValueAtTime(0.3, start + offset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.28);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(start + offset);
+      osc.stop(start + offset + 0.3);
+    });
+  }
+
+  function prepareAudio() {
+    // ブラウザの制限により、音声はボタン操作の中で有効にしておく必要がある
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!audio) audio = new Ctx();
+    if (audio.state === 'suspended') audio.resume();
+  }
+
+  $('toggle').addEventListener('click', () => {
+    $('status').textContent = '';
+    if (endAt !== null) {
+      remaining = Math.max(0, endAt - Date.now());
+      endAt = null;
+      stopTicker();
+    } else {
+      prepareAudio();
+      endAt = Date.now() + remaining;
+      startTicker();
+    }
+    render();
+  });
+
+  $('reset').addEventListener('click', () => {
+    $('status').textContent = '';
+    setMode(mode);
+  });
+
+  ['work', 'break'].forEach((m) => {
+    $(`mode-${m}`).addEventListener('click', () => {
+      $('status').textContent = '';
+      setMode(m);
+    });
+  });
+
+  // ---------- 今日のToDo ----------
+  const STORAGE_KEY = 'pomodoro-todos';
+  const TODO_COUNT = 3;
+  const list = $('todos');
+  const rows = [];
+
+  function todayKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  }
+
+  let shownDay = todayKey();
+
+  function loadTodos() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved && saved.day === todayKey() && Array.isArray(saved.items)) return saved.items;
+    } catch (e) { /* 保存領域が使えない場合は空で始める */ }
+    return [];
+  }
+
+  function saveTodos() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        day: todayKey(),
+        items: rows.map((r) => ({ text: r.text.value, done: r.check.checked })),
+      }));
+    } catch (e) { /* 保存できなくても画面上では使える */ }
+  }
+
+  function syncRow(row) {
+    row.li.classList.toggle('done', row.check.checked);
+  }
+
+  function applyTodos(items) {
+    rows.forEach((row, i) => {
+      const item = items[i] || {};
+      row.text.value = typeof item.text === 'string' ? item.text : '';
+      row.check.checked = item.done === true;
+      syncRow(row);
+    });
+  }
+
+  function renderDate() {
+    $('todo-date').textContent = new Date().toLocaleDateString('ja-JP', {
+      month: 'long', day: 'numeric', weekday: 'short',
+    });
+  }
+
+  for (let i = 0; i < TODO_COUNT; i++) {
+    const li = document.createElement('li');
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.setAttribute('aria-label', `ToDo ${i + 1} を完了にする`);
+    const text = document.createElement('input');
+    text.type = 'text';
+    text.maxLength = 80;
+    text.placeholder = `ToDo ${i + 1}`;
+    text.setAttribute('aria-label', `ToDo ${i + 1}`);
+    li.append(check, text);
+    list.append(li);
+
+    const row = { li, check, text };
+    rows.push(row);
+    check.addEventListener('change', () => { syncRow(row); saveTodos(); });
+    text.addEventListener('input', saveTodos);
+  }
+
+  // 開きっぱなしで日付をまたいだ場合も、戻ってきた時点で新しい日にする
+  function refreshDay() {
+    const day = todayKey();
+    if (day === shownDay) return;
+    shownDay = day;
+    renderDate();
+    applyTodos(loadTodos());
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    tick();
+    if (!document.hidden) refreshDay();
+  });
+  window.addEventListener('focus', refreshDay);
+
+  renderDate();
+  applyTodos(loadTodos());
+  render();
+})();
+</script>
+</body>
+</html>
