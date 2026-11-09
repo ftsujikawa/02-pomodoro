@@ -72,14 +72,15 @@
     background: var(--track);
   }
   .modes button {
+    min-height: 48px;
     padding: 8px 4px;
     border: 0;
     border-radius: 7px;
     background: transparent;
     color: var(--muted);
     font: inherit;
-    font-size: .92rem;
     cursor: pointer;
+    touch-action: manipulation;
   }
   .modes button[aria-pressed="true"] {
     background: var(--panel);
@@ -107,17 +108,20 @@
     letter-spacing: .01em;
   }
 
-  .controls { display: flex; gap: 10px; }
+  .controls { display: flex; gap: 10px; width: 100%; max-width: 280px; }
   .controls button {
-    min-width: 104px;
-    padding: 10px 18px;
+    flex: 1;
+    min-height: 56px;
+    padding: 10px 12px;
     border-radius: 10px;
     border: 1px solid var(--line);
     background: transparent;
     color: var(--text);
     font: inherit;
+    font-size: 1.05rem;
     font-weight: 600;
     cursor: pointer;
+    touch-action: manipulation;
   }
   .controls #toggle {
     border-color: var(--accent);
@@ -129,11 +133,20 @@
   .todo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .todo-date { color: var(--muted); font-size: .85rem; }
   .todos { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 12px; }
-  .todos li { display: flex; align-items: center; gap: 10px; }
-  .todos input[type="checkbox"] {
+  .todos li { display: flex; align-items: center; gap: 4px; }
+  .todos .check {
     flex: none;
-    width: 20px;
-    height: 20px;
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-left: -10px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .todos input[type="checkbox"] {
+    width: 26px;
+    height: 26px;
     margin: 0;
     accent-color: var(--accent);
     cursor: pointer;
@@ -141,6 +154,7 @@
   .todos input[type="text"] {
     flex: 1;
     min-width: 0;
+    min-height: 48px;
     padding: 11px 12px;
     border: 1px solid var(--line);
     border-radius: 9px;
@@ -284,25 +298,41 @@
 
   function chime() {
     if (!audio) return;
+    if (audio.state !== 'running') audio.resume();
     const start = audio.currentTime + 0.05;
-    [0, 0.35, 0.7].forEach((offset) => {
-      const osc = audio.createOscillator();
-      const gain = audio.createGain();
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.0001, start + offset);
-      gain.gain.exponentialRampToValueAtTime(0.3, start + offset + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.28);
-      osc.connect(gain).connect(audio.destination);
-      osc.start(start + offset);
-      osc.stop(start + offset + 0.3);
-    });
+    // 「ピポーン」を3回。スマホの小さなスピーカーでも聞こえやすい高さと音量にする
+    for (let round = 0; round < 3; round++) {
+      const base = start + round * 0.9;
+      tone(1047, base, 0.2);
+      tone(1319, base + 0.2, 0.5);
+    }
+  }
+
+  function tone(frequency, at, length) {
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(0.7, at + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(at);
+    osc.stop(at + length + 0.02);
   }
 
   function prepareAudio() {
     // ブラウザの制限により、音声はボタン操作の中で有効にしておく必要がある
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
-    if (!audio) audio = new Ctx();
+    if (!audio) {
+      audio = new Ctx();
+      // iPhoneなどでは、操作中に一度音を出すと後から鳴らせるようになる（無音を再生）
+      const silence = audio.createBufferSource();
+      silence.buffer = audio.createBuffer(1, 1, audio.sampleRate);
+      silence.connect(audio.destination);
+      silence.start();
+    }
     if (audio.state === 'suspended') audio.resume();
   }
 
@@ -391,7 +421,10 @@
     text.maxLength = 80;
     text.placeholder = `ToDo ${i + 1}`;
     text.setAttribute('aria-label', `ToDo ${i + 1}`);
-    li.append(check, text);
+    const hitArea = document.createElement('label');
+    hitArea.className = 'check';
+    hitArea.append(check);
+    li.append(hitArea, text);
     list.append(li);
 
     const row = { li, check, text };
