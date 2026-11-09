@@ -31,7 +31,7 @@
       --on-accent: #1c1a18;
     }
   }
-  body[data-mode="break"] { --accent: var(--break); }
+  body[data-mode="break"], body[data-mode="long"] { --accent: var(--break); }
 
   * { box-sizing: border-box; }
   body {
@@ -64,9 +64,9 @@
 
   .modes {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     width: 100%;
-    max-width: 280px;
+    max-width: 340px;
     padding: 4px;
     border-radius: 10px;
     background: var(--track);
@@ -184,6 +184,7 @@
     <div class="modes" role="group" aria-label="モード">
       <button type="button" id="mode-work" aria-pressed="true">作業 25分</button>
       <button type="button" id="mode-break" aria-pressed="false">休憩 5分</button>
+      <button type="button" id="mode-long" aria-pressed="false">長い休憩 15分</button>
     </div>
 
     <div class="dial">
@@ -216,11 +217,14 @@
   'use strict';
 
   // ---------- タイマー ----------
-  const DURATIONS = { work: 25 * 60 * 1000, break: 5 * 60 * 1000 };
-  const LABELS = { work: '作業', break: '休憩' };
+  const DURATIONS = { work: 25 * 60 * 1000, break: 5 * 60 * 1000, long: 15 * 60 * 1000 };
+  const LABELS = { work: '作業', break: '休憩', long: '長い休憩' };
+  const MODES = Object.keys(DURATIONS);
+  const LONG_BREAK_EVERY = 4; // この回数の作業を終えると長い休憩に入る
   const $ = (id) => document.getElementById(id);
 
   let mode = 'work';
+  let completedWork = 0; // 時間切れまでやり切った作業の回数
   let remaining = DURATIONS.work;
   let endAt = null; // 動作中のみ、終了時刻（ミリ秒）が入る
   let audio = null;
@@ -266,8 +270,7 @@
     $('time').textContent = text;
     $('progress').style.strokeDashoffset = String(100 * (1 - remaining / DURATIONS[mode]));
     document.body.dataset.mode = mode;
-    $('mode-work').setAttribute('aria-pressed', String(mode === 'work'));
-    $('mode-break').setAttribute('aria-pressed', String(mode === 'break'));
+    MODES.forEach((m) => $(`mode-${m}`).setAttribute('aria-pressed', String(mode === m)));
     $('toggle').textContent = endAt !== null ? '一時停止'
       : remaining < DURATIONS[mode] ? '再開' : '開始';
     document.title = `${text} ${LABELS[mode]} - ポモドーロ`;
@@ -286,11 +289,19 @@
     remaining = Math.max(0, endAt - Date.now());
     if (remaining === 0) {
       const finished = mode;
-      setMode(finished === 'work' ? 'break' : 'work');
+      let next = 'work';
+      if (finished === 'work') {
+        completedWork++;
+        next = completedWork >= LONG_BREAK_EVERY ? 'long' : 'break';
+      }
+      if (next === 'long' || finished === 'long') completedWork = 0;
+      setMode(next);
       chime();
-      $('status').textContent = finished === 'work'
-        ? '作業が終わりました。休憩を始めましょう。'
-        : '休憩が終わりました。作業に戻りましょう。';
+      $('status').textContent = next === 'long'
+        ? `作業を${LONG_BREAK_EVERY}回終えました。長い休憩を始めましょう。`
+        : next === 'break'
+          ? '作業が終わりました。休憩を始めましょう。'
+          : `${LABELS[finished]}が終わりました。作業に戻りましょう。`;
       return;
     }
     render();
@@ -355,7 +366,7 @@
     setMode(mode);
   });
 
-  ['work', 'break'].forEach((m) => {
+  MODES.forEach((m) => {
     $(`mode-${m}`).addEventListener('click', () => {
       $('status').textContent = '';
       setMode(m);
