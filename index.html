@@ -425,7 +425,6 @@
     text.addEventListener('input', saveTodos);
   }
 
-  // 開きっぱなしで日付をまたいだ場合も、表示中の日付を更新する
   document.addEventListener('visibilitychange', () => {
     tick();
     if (!document.hidden) renderDate();
