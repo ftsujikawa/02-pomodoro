@@ -368,17 +368,10 @@
   const list = $('todos');
   const rows = [];
 
-  function todayKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-  }
-
-  let shownDay = todayKey();
-
   function loadTodos() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (saved && saved.day === todayKey() && Array.isArray(saved.items)) return saved.items;
+      if (saved && Array.isArray(saved.items)) return saved.items;
     } catch (e) { /* 保存領域が使えない場合は空で始める */ }
     return [];
   }
@@ -386,7 +379,6 @@
   function saveTodos() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        day: todayKey(),
         items: rows.map((r) => ({ text: r.text.value, done: r.check.checked })),
       }));
     } catch (e) { /* 保存できなくても画面上では使える */ }
@@ -433,20 +425,12 @@
     text.addEventListener('input', saveTodos);
   }
 
-  // 開きっぱなしで日付をまたいだ場合も、戻ってきた時点で新しい日にする
-  function refreshDay() {
-    const day = todayKey();
-    if (day === shownDay) return;
-    shownDay = day;
-    renderDate();
-    applyTodos(loadTodos());
-  }
-
+  // 開きっぱなしで日付をまたいだ場合も、表示中の日付を更新する
   document.addEventListener('visibilitychange', () => {
     tick();
-    if (!document.hidden) refreshDay();
+    if (!document.hidden) renderDate();
   });
-  window.addEventListener('focus', refreshDay);
+  window.addEventListener('focus', renderDate);
 
   renderDate();
   applyTodos(loadTodos());
