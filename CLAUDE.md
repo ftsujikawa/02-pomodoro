@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは、このリポジトリで作業する Claude Code (claude.ai/code) への指針をまとめたものです。
 
 ## ポモドーロタイマー
 
@@ -9,35 +9,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 外部のライブラリやインターネット接続は使わない。
 - ToDo の保存形式(localStorage の pomodoro-todos)は変えない。
 
-## Overview
+## 概要
 
-A Pomodoro timer with a three-item ToDo list. The whole app is `index.html`: inline CSS, markup, and one inline script in an IIFE. There are no dependencies and no external requests. UI text and code comments are in Japanese.
+3項目の ToDo リストが付いたポモドーロタイマーです。アプリ全体が `index.html` に収まっており、インラインの CSS、マークアップ、IIFE で囲んだ1つのインラインスクリプトで構成されています。依存関係も外部へのリクエストもありません。UI の文言とコードのコメントは日本語です。
 
-## Commands
+## コマンド
 
-There is no build, lint, or test tooling. To run the app, open `index.html` in a browser.
+ビルド、リント、テストの仕組みはありません。アプリを動かすには `index.html` をブラウザで開きます。
 
-## Testing changes
+## 変更の確認方法
 
-State lives inside the IIFE, so timer lengths can't be changed from the console. To exercise a full cycle, copy `index.html` outside the repo, shorten `DURATIONS` in the copy, and drive the copy in a browser. Don't edit the constants in place.
+状態は IIFE の内側にあるため、タイマーの長さをコンソールから変更できません。周期全体を試すときは、`index.html` をリポジトリの外にコピーし、コピー側の `DURATIONS` を短縮してブラウザで動かします。定数を直接書き換えないでください。
 
-Headless Chrome won't shrink its window below 500px. To check the 640px-and-under layout at phone widths, load the page in a narrower iframe.
+ヘッドレス Chrome のウィンドウは幅 500px 未満に縮みません。640px 以下のレイアウトをスマホの幅で確認するときは、より狭い iframe の中でページを読み込みます。
 
-## Timer architecture
+## タイマーの構造
 
-- **Time comes from the wall clock.** While running, `endAt` holds the finish timestamp and `tick()` computes `remaining = endAt - Date.now()`. Never count down by decrementing, or the timer drifts when ticks are throttled. `endAt === null` means stopped or paused.
-- **Ticks come from an inline Worker** built from a Blob, because background tabs throttle page timers. `startTicker()` and `stopTicker()` fall back to `setInterval` if the Worker is unavailable or errors.
-- **`DURATIONS` defines the modes**, and `MODES` is derived from its keys. Adding a mode needs a `DURATIONS` entry, a `LABELS` entry, a `<button id="mode-<key>">`, a `body[data-mode="<key>"]` accent rule, and a place in the transition logic in `tick()`. `.modes` also has a hard-coded column count.
-- **Long breaks:** `completedWork` counts only work sessions that ran to zero, so reset and manual mode changes leave it alone. It returns to 0 when a long break is entered automatically and when any long break finishes. It is deliberately not persisted, matching the timer's other state.
-- **Mode changes go through `setMode()`**, which stops the ticker and resets `remaining`. `render()` writes all timer DOM from state, including the progress ring, `aria-pressed`, and the tab title.
-- **Audio must be unlocked in a user gesture.** `prepareAudio()` runs from the start button's click handler and plays a silent buffer for iOS. `chime()` can only sound if that has already happened.
+- **時間は実時刻から求める。** 動作中は `endAt` に終了時刻が入り、`tick()` が `remaining = endAt - Date.now()` を計算します。ティックが間引かれるとずれるので、減算でカウントダウンしないでください。`endAt === null` は停止中または一時停止中を表します。
+- **ティックは Blob から作るインライン Worker で刻む。** 背景タブではページのタイマーが間引かれるためです。Worker が使えない場合やエラーになった場合、`startTicker()` と `stopTicker()` は `setInterval` に切り替えます。
+- **モードは `DURATIONS` で定義する。** `MODES` はそのキーから作られます。モードを追加するには、`DURATIONS` と `LABELS` の項目、`<button id="mode-<key>">`、`body[data-mode="<key>"]` のアクセント色の指定、`tick()` の遷移処理への組み込みが必要です。`.modes` の列数も固定値で書かれています。
+- **長い休憩の回数:** `completedWork` は時間切れまで終えた作業だけを数えるので、リセットや手動のモード切り替えでは変わりません。長い休憩に自動で入ったときと、長い休憩が終わったときに 0 に戻ります。タイマーの他の状態に合わせて、あえて保存していません。
+- **モードの変更は `setMode()` を通す。** ティッカーを止めて `remaining` を初期化します。進捗リング、`aria-pressed`、タブのタイトルを含むタイマーの DOM は、すべて `render()` が状態から書き込みます。
+- **音声はユーザー操作の中で有効にする必要がある。** `prepareAudio()` は開始ボタンのクリック処理から呼ばれ、iOS 向けに無音のバッファを再生します。これが実行済みでないと `chime()` は音を出せません。
 
-## ToDo list
+## ToDo リスト
 
-Rows are built in JS (`TODO_COUNT`) and saved to `localStorage` under `pomodoro-todos` as `{ items: [{ text, done }] }`. Items intentionally carry over between days; the date in the header is display-only and is not used to clear anything. Storage access is wrapped in `try/catch` so the page still works without it.
+行は JS で生成し（`TODO_COUNT`）、`localStorage` の `pomodoro-todos` に `{ items: [{ text, done }] }` の形で保存します。項目は意図的に翌日以降へ持ち越します。ヘッダーの日付は表示専用で、項目の消去には使いません。保存領域へのアクセスは `try/catch` で囲んであり、使えない環境でもページは動きます。
 
-## Styling conventions
+## スタイルの決まり
 
-- Colors are CSS variables on `:root`, redefined in the `prefers-color-scheme: dark` block. New colors need both values.
-- `--accent` follows the current mode through `body[data-mode]`.
-- Touch targets are at least 48px tall, for use on phones.
+- 色は `:root` の CSS 変数で定義し、`prefers-color-scheme: dark` のブロックで再定義します。新しい色には両方の値が必要です。
+- `--accent` は `body[data-mode]` を通じて現在のモードに連動します。
+- タッチ領域はスマホで使えるよう、高さ 48px 以上にします。
